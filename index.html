@@ -84,19 +84,37 @@ const firebaseConfig = { databaseURL: "https://task-fca42-default-rtdb.asia-sout
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-let teams = JSON.parse(localStorage.getItem('tr_teams')) || ['チームA', 'チームB'];
+let teams = ['チームA', 'チームB'];
 let activeTeam = teams[0];
 let timeOff = 0;
 let remoteData = {};
 let MEMBERS = [];
 let CHANNELS = [];
 
-function init() { renderTabs(); connectTeam(); }
+function init() {
+  // チームリスト自体をFirebaseから取得
+  db.ref('settings/teamList').on('value', (snap) => {
+    const list = snap.val();
+    if (list) {
+      teams = list.split(',').map(s => s.trim());
+      if (!teams.includes(activeTeam)) activeTeam = teams[0];
+    }
+    renderTabs();
+    connectTeam();
+  });
+}
+
 function renderTabs() {
   const container = document.getElementById('team-tabs');
   container.innerHTML = teams.map(t => `<div class="team-tab ${t === activeTeam ? 'active' : ''}" onclick="switchTeam('${t}')">${t}</div>`).join('');
 }
-function switchTeam(teamName) { activeTeam = teamName; renderTabs(); connectTeam(); }
+
+function switchTeam(teamName) {
+  activeTeam = teamName;
+  renderTabs();
+  connectTeam();
+}
+
 function connectTeam() {
   db.ref(activeTeam).off();
   db.ref(activeTeam).on('value', (snap) => {
@@ -231,21 +249,26 @@ window.openSettings = () => {
   const chNames = CHANNELS.map(c => c.name).join(',');
   root.innerHTML = `<div style="position:fixed;inset:0;background:rgba(0,0,0,0.9);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;"><div style="background:var(--bg2);padding:24px;border-radius:var(--radius-lg);width:100%;max-width:360px;max-height:90vh;overflow-y:auto;">
     <div style="font-weight:700;margin-bottom:15px;color:var(--c0);font-size:18px;">管理設定</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:5px;">チーム名（改行で複数）</div>
-    <textarea id="t-list" style="width:100%;height:60px;background:var(--bg3);color:#fff;border:1px solid var(--border2);padding:10px;border-radius:8px;font-size:13px;margin-bottom:15px;">${teams.join('\n')}</textarea>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:5px;">チャンネル名（カンマ区切り）</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:5px;">チーム名（カンマ区切り）</div>
+    <textarea id="t-list" style="width:100%;height:60px;background:var(--bg3);color:#fff;border:1px solid var(--border2);padding:10px;border-radius:8px;font-size:13px;margin-bottom:15px;">${teams.join(',')}</textarea>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:5px;">${activeTeam}のチャンネル（カンマ区切り）</div>
     <input id="c-list" type="text" value="${chNames}" style="width:100%;background:var(--bg3);color:#fff;border:1px solid var(--border2);padding:10px;border-radius:8px;font-size:13px;margin-bottom:15px;">
-    <div style="font-size:12px;color:var(--text3);margin-bottom:5px;">メンバー名（改行で複数）</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:5px;">${activeTeam}のメンバー（改行で複数）</div>
     <textarea id="m-list" style="width:100%;height:100px;background:var(--bg3);color:#fff;border:1px solid var(--border2);padding:10px;border-radius:8px;font-size:13px;margin-bottom:15px;">${MEMBERS.join('\n')}</textarea>
     <button style="width:100%;padding:15px;background:var(--c0);border:none;color:#fff;font-weight:700;border-radius:8px;cursor:pointer;font-size:16px;" onclick="saveAll()">保存して閉じる</button>
   </div></div>`;
 };
 window.saveAll = () => {
-  const tList = document.getElementById('t-list').value.split('\n').map(s => s.trim()).filter(Boolean);
+  const tListRaw = document.getElementById('t-list').value.trim();
   const mList = document.getElementById('m-list').value.split('\n').map(s => s.trim()).filter(Boolean);
   const cList = document.getElementById('c-list').value.trim();
-  if(tList.length) { teams = tList; localStorage.setItem('tr_teams', JSON.stringify(teams)); if(!teams.includes(activeTeam)) activeTeam = teams[0]; }
-  db.ref(`${activeTeam}`).update({ members: mList, channels: cList }).then(() => { document.getElementById('modal-root').innerHTML=''; init(); });
+  
+  // チームリストをFirebaseに保存
+  db.ref('settings/teamList').set(tListRaw);
+  // 個別チームの設定を保存
+  db.ref(`${activeTeam}`).update({ members: mList, channels: cList }).then(() => {
+    document.getElementById('modal-root').innerHTML='';
+  });
 };
 init();
 </script>
