@@ -274,5 +274,19 @@ window.saveAll = () => {
 };
 init();
 </script>
+// --- 簡易パスワード機能 ---
+const PASS = "1111"; // ★ここを好きな暗証番号に変えてください
+let auth = sessionStorage.getItem('app_auth');
+
+if (auth !== PASS) {
+  const input = prompt("暗証番号を入力してください");
+  if (input === PASS) {
+    sessionStorage.setItem('app_auth', PASS);
+  } else {
+    alert("番号が違います");
+    document.body.innerHTML = "<h1 style='color:white; padding:20px;'>閲覧権限がありません</h1>";
+    window.stop();
+  }
+}
 </body>
 </html>
