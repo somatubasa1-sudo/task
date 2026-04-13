@@ -7,7 +7,6 @@
 <title>リソース管理</title>
 
 <script>
-// --- 🔐 暗証番号チェック ---
 (function() {
   const PASS = "1111"; 
   if (sessionStorage.getItem('app_auth') !== PASS) {
@@ -39,25 +38,14 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
 .ch-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
 @media (min-width: 768px) { .ch-grid { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); } }
 .ch-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 10px; }
-.ch-card-header { padding: 16px; border-bottom: 1px solid var(--border); font-weight: 700; display: flex; align-items: center; gap: 10px; font-size: 15px; }
-.ch-color { width: 5px; height: 18px; border-radius: 2px; }
+.ch-card-header { padding: 16px; border-bottom: 1px solid var(--border); font-weight: 700; display: flex; align-items: center; justify-content: space-between; font-size: 15px; }
 .achieve-wrap { padding: 12px 16px; background: var(--bg); margin: 10px 16px; border-radius: 8px; }
 .achieve-head { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 11px; color: var(--text3); font-weight: 700; }
 .achieve-track { height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
 .vid-list { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 10px; }
-.section-label { font-size: 10px; font-weight: 700; color: var(--text3); padding: 14px 16px 4px; letter-spacing: 0.1em; }
 .vid-item { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; }
-.vid-item.is-done { border: 1.5px solid var(--c1); background: rgba(46, 201, 154, 0.05); }
-.status-row { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
-.vid-title-input { flex: 1; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; color: #fff; font-size: 13px; padding: 10px; }
-.status-btn { padding: 10px 12px; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; border: none; min-width: 70px; }
-.status-btn.pre { background: var(--bg); color: var(--text3); border: 1px solid var(--border2); }
-.status-btn.done { background: var(--c1); color: #000; }
-.assign-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.assign-col-label { font-size: 9px; color: var(--text3); font-weight: 700; margin-bottom: 4px; text-align: center; border-bottom: 1px solid var(--border); padding-bottom: 2px; }
-.m-check-list { display: flex; flex-direction: column; gap: 4px; }
-.m-check { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text2); cursor: pointer; padding: 2px 0; }
-.m-check input { width: 14px; height: 14px; accent-color: var(--c0); }
+.tk-item { display: flex; align-items: center; gap: 8px; background: var(--bg3); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 4px; }
+.tk-select { background: var(--bg); border: 1px solid var(--border2); color: var(--text2); font-size: 11px; border-radius: 4px; padding: 4px; flex: 1; }
 </style>
 </head>
 <body>
@@ -92,15 +80,14 @@ let MEMBERS = [];
 let CHANNELS = [];
 
 function init() {
-  // チームリスト自体をFirebaseから取得
   db.ref('settings/teamList').on('value', (snap) => {
     const list = snap.val();
-    if (list) {
+    if (list) { 
       teams = list.split(',').map(s => s.trim());
-      if (!teams.includes(activeTeam)) activeTeam = teams[0];
+      if (!teams.includes('TikTok')) teams.push('TikTok');
+      if (!teams.includes(activeTeam)) activeTeam = teams[0]; 
     }
-    renderTabs();
-    connectTeam();
+    renderTabs(); connectTeam();
   });
 }
 
@@ -109,59 +96,58 @@ function renderTabs() {
   container.innerHTML = teams.map(t => `<div class="team-tab ${t === activeTeam ? 'active' : ''}" onclick="switchTeam('${t}')">${t}</div>`).join('');
 }
 
-function switchTeam(teamName) {
-  activeTeam = teamName;
-  renderTabs();
-  connectTeam();
-}
+function switchTeam(teamName) { activeTeam = teamName; renderTabs(); connectTeam(); }
 
 function connectTeam() {
   db.ref(activeTeam).off();
   db.ref(activeTeam).on('value', (snap) => {
     remoteData = snap.val() || {};
     MEMBERS = remoteData.members || ['メンバーA', 'メンバーB'];
-    const chRaw = remoteData.channels || 'ゆっきーTV,湿度ch,橘マオTV,VALHALLA';
-    CHANNELS = chRaw.split(',').map((name, i) => ({
-      name: name.trim(),
-      target: 8,
-      color: ['#7c6ff7', '#2ec99a', '#f07040', '#e8608a', '#ffcc00', '#ff3366'][i % 6]
-    }));
+    const chRaw = remoteData.channels || 'ゆっきーTV:8,湿度ch:8';
+    CHANNELS = chRaw.split(',').map((item, i) => {
+      const [name, target] = item.split(':');
+      return {
+        name: name.trim(),
+        target: parseInt(target) || 8,
+        color: ['#7c6ff7', '#2ec99a', '#f07040', '#e8608a', '#ffcc00', '#ff3366'][i % 6]
+      };
+    });
     updateLabels(); renderStats(); buildGrid();
   });
 }
 
 function getTimeKey() {
-  const d = new Date();
-  d.setMonth(d.getMonth() + timeOff);
+  const d = new Date(); d.setMonth(d.getMonth() + timeOff);
   return `m_${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
 function updateLabels() {
-  const d = new Date();
-  d.setMonth(d.getMonth() + timeOff);
+  const d = new Date(); d.setMonth(d.getMonth() + timeOff);
   document.getElementById('time-label').textContent = `${d.getFullYear()}年 ${d.getMonth()+1}月`;
 }
 
 function renderStats() {
-  const tk = getTimeKey();
-  const scores = {};
+  const tk = getTimeKey(); const scores = {};
   MEMBERS.forEach(m => scores[m] = 0);
-  
   CHANNELS.forEach((_, ci) => {
-    const n = ((remoteData.cnt || {})[tk] || {})[ci] || 1;
+    const n = ((remoteData.cnt || {})[tk] || {})[ci] || (activeTeam === 'TikTok' ? 30 : 1);
     const chVids = ((remoteData.vids || {})[tk] || {})[ci] || {};
     for (let i = 0; i < n; i++) {
       const d = chVids[i] || {};
-      (d.s_members || []).forEach(m => { if(scores[m]!==undefined) scores[m] += 0.5; });
-      (d.p_members || []).forEach(m => { if(scores[m]!==undefined) scores[m] += 0.5; });
+      if(activeTeam === 'TikTok') {
+        if(d.s_member) scores[d.s_member] = (scores[d.s_member]||0) + 0.5;
+        if(d.p_member) scores[d.p_member] = (scores[d.p_member]||0) + 0.5;
+      } else {
+        (d.s_members || []).forEach(m => { if(scores[m]!==undefined) scores[m] += 0.5; });
+        (d.p_members || []).forEach(m => { if(scores[m]!==undefined) scores[m] += 0.5; });
+      }
     }
   });
-
   const container = document.getElementById('member-stats');
   container.innerHTML = MEMBERS.map(m => `
     <div class="member-stat-card">
       <div style="font-size:10px;color:var(--text2)">${m}</div>
-      <div class="ms-score">${scores[m].toFixed(1)}</div>
+      <div class="ms-score">${(scores[m]||0).toFixed(1)}</div>
     </div>
   `).join('');
 }
@@ -169,107 +155,105 @@ function renderStats() {
 function buildGrid() {
   const tk = getTimeKey();
   const grid = document.getElementById('ch-grid'); grid.innerHTML = '';
-
   CHANNELS.forEach((ch, ci) => {
-    const n = ((remoteData.cnt || {})[tk] || {})[ci] || 1;
-    let postedCount = 0;
-    const workItems = [], doneItems = [];
+    const n = ((remoteData.cnt || {})[tk] || {})[ci] || (activeTeam === 'TikTok' ? 30 : 1);
+    let doneCount = 0;
+    const vids = ((remoteData.vids || {})[tk] || {})[ci] || {};
     
-    for (let i = 0; i < n; i++) {
-      const d = (((remoteData.vids || {})[tk] || {})[ci] || {})[i] || { title:'', posted:false };
-      const item = { vi: i, data: d };
-      if (d.posted) { postedCount++; doneItems.push(item); } else { workItems.push(item); }
-    }
-
-    const target = 8;
-    const pct = Math.min(100, Math.round((postedCount / target) * 100));
-
     const card = document.createElement('div'); card.className = 'ch-card';
     card.innerHTML = `
-      <div class="ch-card-header"><div class="ch-color" style="background:${ch.color}"></div>${ch.name}</div>
+      <div class="ch-card-header"><div style="display:flex;align-items:center;gap:10px;"><div style="width:5px;height:18px;border-radius:2px;background:${ch.color}"></div>${ch.name}</div></div>
       <div class="achieve-wrap">
-        <div class="achieve-head"><span>月間進捗</span><span>${postedCount}/${target}</span></div>
-        <div class="achieve-track"><div style="height:100%; width:${pct}%; background:${ch.color}; transition:0.4s;"></div></div>
+        <div class="achieve-head"><span>月間進捗</span><span id="prog-text-${ci}">0/${ch.target}</span></div>
+        <div class="achieve-track"><div id="prog-bar-${ci}" style="height:100%; width:0%; background:${ch.color}; transition:0.4s;"></div></div>
       </div>
-      <div class="vid-list">
-        <div id="done-${ci}"></div>
-        <div class="section-label">制作中</div>
-        <div id="work-${ci}"></div>
-        <div style="padding-top:10px; font-size:11px; color:var(--text3)">
-          今月の枠数: <input type="number" style="width:50px; background:var(--bg3); border:1px solid var(--border); color:#fff; text-align:center; padding:4px; border-radius:4px;" value="${n}" onchange="updateCnt('${tk}', ${ci}, this.value)">
-        </div>
+      <div class="vid-list" id="list-${ci}"></div>
+      <div style="padding: 10px 16px; border-top: 1px solid var(--border); font-size:11px; color:var(--text3)">
+        今月の枠数: <input type="number" style="width:50px; background:var(--bg3); border:1px solid var(--border); color:#fff; text-align:center;" value="${n}" onchange="updateCnt('${tk}', ${ci}, this.value)">
       </div>
     `;
     grid.appendChild(card);
-    renderList(ci, doneItems, `done-${ci}`, tk); renderList(ci, workItems, `work-${ci}`, tk);
+    
+    const listCont = document.getElementById(`list-${ci}`);
+    for (let i = 0; i < n; i++) {
+      const d = vids[i] || {};
+      const div = document.createElement('div');
+      
+      if (activeTeam === 'TikTok') {
+        // TikTokモード: 簡略UI
+        const isSet = d.s_member || d.p_member;
+        if(isSet) doneCount++;
+        div.className = 'tk-item';
+        div.innerHTML = `
+          <div style="font-size:10px; color:var(--text3); min-width:20px;">${i+1}</div>
+          <select class="tk-select" onchange="updateVal('${tk}',${ci},${i},'s_member',this.value)">
+            <option value="">撮影者</option>
+            ${MEMBERS.map(m => `<option value="${m}" ${d.s_member===m?'selected':''}>${m}</option>`).join('')}
+          </select>
+          <select class="tk-select" onchange="updateVal('${tk}',${ci},${i},'p_member',this.value)">
+            <option value="">編集者</option>
+            ${MEMBERS.map(m => `<option value="${m}" ${d.p_member===m?'selected':''}>${m}</option>`).join('')}
+          </select>
+        `;
+      } else {
+        // 通常モード
+        if(d.posted) doneCount++;
+        div.className = `vid-item ${d.posted?'is-done':''}`;
+        div.style.marginBottom = "8px";
+        div.innerHTML = `
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <input type="text" class="tk-select" style="flex:2;padding:8px;" placeholder="タイトル" value="${d.title||''}" onchange="updateVal('${tk}',${ci},${i},'title',this.value)">
+            <button class="status-btn ${d.posted?'done':'pre'}" onclick="togglePost('${tk}',${ci},${i})">${d.posted?'済':'未'}</button>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:10px;">
+            <div>撮影:${(d.s_members||[]).join(',')} <button onclick="pickM('${tk}',${ci},${i},'s')">+</button></div>
+            <div>編集:${(d.p_members||[]).join(',')} <button onclick="pickM('${tk}',${ci},${i},'p')">+</button></div>
+          </div>
+        `;
+      }
+      listCont.appendChild(div);
+    }
+    document.getElementById(`prog-text-${ci}`).textContent = `${doneCount}/${ch.target}`;
+    document.getElementById(`prog-bar-${ci}`).style.width = `${Math.min(100, (doneCount/ch.target)*100)}%`;
   });
 }
 
-function renderList(ci, items, containerId, tk) {
-  const container = document.getElementById(containerId);
-  items.forEach(item => {
-    const d = item.data; const div = document.createElement('div'); div.className = `vid-item ${d.posted ? 'is-done' : ''}`;
-    div.style.marginBottom = "8px";
-    div.innerHTML = `
-      <div class="status-row">
-        <input type="text" class="vid-title-input" placeholder="動画タイトル..." value="${d.title||''}" onchange="updateTitle('${tk}', ${ci}, ${item.vi}, this.value)">
-        <button class="status-btn ${d.posted?'done':'pre'}" onclick="togglePosted('${tk}', ${ci}, ${item.vi})">${d.posted?'投稿済':'未投稿'}</button>
-      </div>
-      <div class="assign-grid">
-        <div>
-          <div class="assign-col-label">撮影+カット</div>
-          <div class="m-check-list">${MEMBERS.map(m => `<label class="m-check"><input type="checkbox" ${(d.s_members||[]).includes(m)?'checked':''} onchange="toggleMember('${tk}', ${ci}, ${item.vi}, '${m}', 's')"><span>${m}</span></label>`).join('')}</div>
-        </div>
-        <div>
-          <div class="assign-col-label">修正/投稿</div>
-          <div class="m-check-list">${MEMBERS.map(m => `<label class="m-check"><input type="checkbox" ${(d.p_members||[]).includes(m)?'checked':''} onchange="toggleMember('${tk}', ${ci}, ${item.vi}, '${m}', 'p')"><span>${m}</span></label>`).join('')}</div>
-        </div>
-      </div>
-    `;
-    container.appendChild(div);
-  });
-}
-
-window.changeTime = (n) => { timeOff += n; updateLabels(); buildGrid(); renderStats(); };
-window.updateTitle = (tk, ci, vi, val) => db.ref(`${activeTeam}/vids/${tk}/${ci}/${vi}`).update({ title: val });
-window.togglePosted = (tk, ci, vi) => {
-  const d = (((remoteData.vids || {})[tk] || {})[ci] || {})[vi] || { posted: false };
-  db.ref(`${activeTeam}/vids/${tk}/${ci}/${vi}`).update({ posted: !d.posted, updatedAt: Date.now() });
+// --- 操作系 ---
+window.updateVal = (tk, ci, vi, key, val) => db.ref(`${activeTeam}/vids/${tk}/${ci}/${vi}`).update({ [key]: val });
+window.updateCnt = (tk, ci, val) => db.ref(`${activeTeam}/cnt/${tk}/${ci}`).set(parseInt(val)||1);
+window.togglePost = (tk, ci, vi) => {
+  const cur = (((remoteData.vids||{})[tk]||{})[ci]||{})[vi]||{};
+  db.ref(`${activeTeam}/vids/${tk}/${ci}/${vi}`).update({ posted: !cur.posted });
 };
-window.toggleMember = (tk, ci, vi, member, type) => {
+window.pickM = (tk, ci, vi, type) => {
+  const m = prompt("名前を入力 (または空でリセット)");
   const key = type === 's' ? 's_members' : 'p_members';
-  let list = ((((remoteData.vids || {})[tk] || {})[ci] || {})[vi] || {})[key] || [];
-  list = list.includes(member) ? list.filter(m => m !== member) : [...list, member];
-  db.ref(`${activeTeam}/vids/${tk}/${ci}/${vi}/${key}`).set(list);
+  db.ref(`${activeTeam}/vids/${tk}/${ci}/${vi}/${key}`).set(m ? [m] : []);
 };
-window.updateCnt = (tk, ci, val) => db.ref(`${activeTeam}/cnt/${tk}/${ci}`).set(Math.max(1, parseInt(val)||1));
+window.changeTime = (n) => { timeOff += n; updateLabels(); };
 
 window.openSettings = () => {
   const root = document.getElementById('modal-root');
-  const chNames = CHANNELS.map(c => c.name).join(',');
-  root.innerHTML = `<div style="position:fixed;inset:0;background:rgba(0,0,0,0.9);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;"><div style="background:var(--bg2);padding:24px;border-radius:var(--radius-lg);width:100%;max-width:360px;max-height:90vh;overflow-y:auto;">
-    <div style="font-weight:700;margin-bottom:15px;color:var(--c0);font-size:18px;">管理設定</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:5px;">チーム名（カンマ区切り）</div>
-    <textarea id="t-list" style="width:100%;height:60px;background:var(--bg3);color:#fff;border:1px solid var(--border2);padding:10px;border-radius:8px;font-size:13px;margin-bottom:15px;">${teams.join(',')}</textarea>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:5px;">${activeTeam}のチャンネル（カンマ区切り）</div>
-    <input id="c-list" type="text" value="${chNames}" style="width:100%;background:var(--bg3);color:#fff;border:1px solid var(--border2);padding:10px;border-radius:8px;font-size:13px;margin-bottom:15px;">
-    <div style="font-size:12px;color:var(--text3);margin-bottom:5px;">${activeTeam}のメンバー（改行で複数）</div>
-    <textarea id="m-list" style="width:100%;height:100px;background:var(--bg3);color:#fff;border:1px solid var(--border2);padding:10px;border-radius:8px;font-size:13px;margin-bottom:15px;">${MEMBERS.join('\n')}</textarea>
-    <button style="width:100%;padding:15px;background:var(--c0);border:none;color:#fff;font-weight:700;border-radius:8px;cursor:pointer;font-size:16px;" onclick="saveAll()">保存して閉じる</button>
+  const chRaw = CHANNELS.map(c => `${c.name}:${c.target}`).join(',');
+  root.innerHTML = `<div style="position:fixed;inset:0;background:rgba(0,0,0,0.9);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;"><div style="background:var(--bg2);padding:24px;border-radius:var(--radius-lg);width:100%;max-width:360px;">
+    <div style="font-weight:700;margin-bottom:15px;color:var(--c0);">管理設定</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">チーム名 (カンマ区切り)</div>
+    <input id="t-list" type="text" value="${teams.filter(t=>t!=='TikTok').join(',')}" style="width:100%;background:var(--bg3);color:#fff;border:1px solid var(--border);padding:10px;margin-bottom:15px;">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">${activeTeam}のチャンネル (名前:目標本数, ...)</div>
+    <input id="c-list" type="text" value="${chRaw}" style="width:100%;background:var(--bg3);color:#fff;border:1px solid var(--border);padding:10px;margin-bottom:15px;">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">メンバー名 (改行)</div>
+    <textarea id="m-list" style="width:100%;height:100px;background:var(--bg3);color:#fff;border:1px solid var(--border);padding:10px;">${MEMBERS.join('\n')}</textarea>
+    <button style="width:100%;padding:15px;background:var(--c0);color:#fff;border:none;margin-top:15px;" onclick="saveAll()">保存</button>
   </div></div>`;
 };
 window.saveAll = () => {
-  const tListRaw = document.getElementById('t-list').value.trim();
-  const mList = document.getElementById('m-list').value.split('\n').map(s => s.trim()).filter(Boolean);
-  const cList = document.getElementById('c-list').value.trim();
-  
-  // チームリストをFirebaseに保存
-  db.ref('settings/teamList').set(tListRaw);
-  // 個別チームの設定を保存
-  db.ref(`${activeTeam}`).update({ members: mList, channels: cList }).then(() => {
-    document.getElementById('modal-root').innerHTML='';
-  });
+  const tList = document.getElementById('t-list').value;
+  const mList = document.getElementById('m-list').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const cList = document.getElementById('c-list').value;
+  db.ref('settings/teamList').set(tList);
+  db.ref(`${activeTeam}`).update({ members: mList, channels: cList }).then(() => { document.getElementById('modal-root').innerHTML=''; });
 };
+
 init();
 </script>
 </body>
