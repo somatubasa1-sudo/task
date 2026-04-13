@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -46,9 +47,9 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
 .achieve-track { height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
 /* 格納エリアの制御 */
 .ch-body { display: none; padding-top: 10px; border-top: 1px solid var(--border); }
-.ch-card.open .ch-body { display: block; }
+.ch-card.is-open .ch-body { display: block; }
 .expand-icon { font-size: 12px; color: var(--text3); transition: 0.3s; }
-.ch-card.open .expand-icon { transform: rotate(180deg); }
+.ch-card.is-open .expand-icon { transform: rotate(180deg); }
 
 .vid-list { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 10px; }
 .section-label { font-size: 10px; font-weight: 700; color: var(--text3); padding: 14px 0 4px; letter-spacing: 0.1em; }
@@ -99,6 +100,8 @@ let timeOff = 0;
 let remoteData = {};
 let MEMBERS = [];
 let CHANNELS = [];
+// 開閉状態を保存するSet
+let openChannels = new Set();
 
 function init() {
   db.ref('settings/teamList').on('value', (snap) => {
@@ -113,7 +116,12 @@ function renderTabs() {
   container.innerHTML = teams.map(t => `<div class="team-tab ${t === activeTeam ? 'active' : ''}" onclick="switchTeam('${t}')">${t}</div>`).join('');
 }
 
-function switchTeam(teamName) { activeTeam = teamName; renderTabs(); connectTeam(); }
+function switchTeam(teamName) { 
+  activeTeam = teamName; 
+  openChannels.clear(); // チーム切り替え時はリセット
+  renderTabs(); 
+  connectTeam(); 
+}
 
 function connectTeam() {
   db.ref(activeTeam).off();
@@ -156,7 +164,7 @@ function renderStats() {
 }
 
 function applyChBulk(ci, event) {
-  event.stopPropagation(); // 親の開閉イベントを防止
+  event.stopPropagation();
   const s = document.getElementById(`bulk-s-${ci}`).value;
   const p = document.getElementById(`bulk-p-${ci}`).value;
   if(!s && !p) return;
@@ -171,8 +179,13 @@ function applyChBulk(ci, event) {
   }
 }
 
-function toggleCard(cardElement) {
-  cardElement.classList.toggle('open');
+function toggleCard(ci) {
+  if (openChannels.has(ci)) {
+    openChannels.delete(ci);
+  } else {
+    openChannels.add(ci);
+  }
+  buildGrid(); // 再描画
 }
 
 function buildGrid() {
@@ -187,14 +200,16 @@ function buildGrid() {
       if (d.posted) { postedCount++; doneItems.push({ vi: i, data: d }); } else { workItems.push({ vi: i, data: d }); }
     }
     const pct = Math.min(100, Math.round((postedCount / ch.target) * 100));
+    const isOpen = openChannels.has(ci);
+
     const card = document.createElement('div'); 
-    card.className = 'ch-card';
+    card.className = `ch-card ${isOpen ? 'is-open' : ''}`;
     card.innerHTML = `
-      <div class="ch-card-header" onclick="toggleCard(this.parentElement)">
+      <div class="ch-card-header" onclick="toggleCard(${ci})">
         <div style="display:flex; align-items:center;"><div class="ch-color" style="background:${ch.color}"></div>${ch.name}</div>
         <div class="expand-icon">▼</div>
       </div>
-      <div class="achieve-wrap" onclick="toggleCard(this.parentElement)">
+      <div class="achieve-wrap" onclick="toggleCard(${ci})">
         <div class="achieve-head"><span>月間進捗</span><span>${postedCount}/${ch.target}</span></div>
         <div class="achieve-track"><div style="height:100%; width:${pct}%; background:${ch.color}; transition:0.4s;"></div></div>
       </div>
@@ -229,7 +244,7 @@ function renderList(ci, items, containerId, tk) {
       <div class="status-row">
         ${isTikTok ? `<div style="flex:1; font-size:12px; font-weight:700; color:var(--text2)"># ${item.vi + 1}</div>` : 
         `<input type="text" class="vid-title-input" placeholder="タイトル..." value="${d.title||''}" onchange="updateValue('${tk}', ${ci}, ${item.vi}, 'title', this.value)">`}
-        <button class="status-btn ${d.posted?'done':'pre'}" onclick="togglePosted('${tk}', ${ci}, ${item.vi})">${d.posted?'済':'未'}</button>
+        <button class="status-btn ${d.posted?'done':'pre'}" onclick="togglePosted('${tk}', ${ci}, ${item.vi}, event)">${d.posted?'済':'未'}</button>
       </div>
       <div class="assign-grid">
         <div><div class="assign-col-label">撮影者</div><div class="m-check-list">${MEMBERS.map(m => `<label class="m-check"><input type="checkbox" ${(d.s_members||[]).includes(m)?'checked':''} onchange="toggleMember('${tk}', ${ci}, ${item.vi}, '${m}', 's')"><span>${m}</span></label>`).join('')}</div></div>
@@ -241,7 +256,8 @@ function renderList(ci, items, containerId, tk) {
 }
 
 window.updateValue = (tk, ci, vi, key, val) => db.ref(`${activeTeam}/vids/${tk}/${ci}/${vi}`).update({ [key]: val });
-window.togglePosted = (tk, ci, vi) => {
+window.togglePosted = (tk, ci, vi, event) => {
+  event.stopPropagation();
   const d = (((remoteData.vids || {})[getTimeKey()] || {})[ci] || {})[vi] || { posted: false };
   db.ref(`${activeTeam}/vids/${getTimeKey()}/${ci}/${vi}`).update({ posted: !d.posted });
 };
